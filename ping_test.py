@@ -1,10 +1,12 @@
 import sys
 import os
+import subprocess as sp
 from datetime import datetime
 from time import sleep
 from tkinter import *
 from tkinter import ttk
-from threading import Thread
+from threading import Thread, Lock
+import re
 PLATFORM_PING_ARGS = {"win32": '-n', "linux": '-c'}
 CURRENT_PLATFORM = sys.platform
 PING_INDICATOR = PLATFORM_PING_ARGS[CURRENT_PLATFORM]
@@ -13,6 +15,7 @@ PING_INDICATOR = PLATFORM_PING_ARGS[CURRENT_PLATFORM]
 address_strings = []
 address_set = {}
 addresses = [] 
+mutex = Lock()
 class TestAddress:
     address = ""
     ping_count = 0
@@ -23,23 +26,30 @@ class TestAddress:
         self.ping_count = 0
         self.time_log = [] ## make this a list of tuples (a,b) -> a = time -> b = response code (1 = problem, 0 = ok)
 
-    def addLog(self,time, res):
+    def add_log(self,time, res):
         self.time_log.append((time,res))
 
-    def writeLog(self, path, mode='w'):
+    def write_log(self, path, mode='w'):
         response_string_map = {0: "Connection ok.",1: "Disconnected."}
         with open(path,mode) as f:
             for (t,r) in self.time_log:
                 try:
                     f.write(f"{t}:  {response_string_map[r]}.\n")
                 except KeyError:
-                    f.wrote(f"{t}:  Unexpected error {r}.\n")
+                    f.write(f"{t}:  Unexpected error {r}.\n")
 
     def ping(self):
         now = datetime.now()
-        response = os.system(f"ping {PING_INDICATOR} 1 {self.address} > null")
+        mutex.acquire()
+        try:
+            response = sp.run(["ping",PING_INDICATOR,"1",self.address])
+        except:
+            print(f"Something went wrong trying to ping {self.address}")
+        finally:
+            mutex.release()
+
         now_string = now.strftime("%H:%M:%S")
-        self.time_log.append((now_string,response))
+        self.time_log.append((now_string,response.returncode))
         self.ping_count += 1
         return response
 
@@ -52,23 +62,21 @@ def add_addr():
 
 def thread_ping(address : TestAddress, address_name):
     counter = 0
-    global stop_bool
     while not stop_bool:
         res = address.ping()
-        if res == 0:
-            address_set[address_name] = "CONNECTED"
+        if res.returncode == 0:
+            address_set[address_name] = "CONNECTED \n"
             sleep(1) 
         else:
-            address_set[address_name] = "DISCONNECTED"
+            address_set[address_name] = "DISCONNECTED\n "
             sleep(3)
         if counter > 5:
-            address.writeLog(f"{address_name}_LOG_TEMP")
+            address.write_log(f"{address_name}_LOG_TEMP")
             counter = 0
         counter += 1
 
 
 def thread_update():
-    global stop_bool
     while not stop_bool:
         address_space.delete('1.0', END)
         for k in address_set:
@@ -100,49 +108,20 @@ def start():
 
 
 stop_bool = False
+
+## This function is completely cursed.... I have no idea why it can't do a single thing I want it to. 
 def stop():
-    global stop_bool 
     stop_bool = True
     sleep(5) # this is a shit way of trying to make sure no more writing is being done to the files before compilation:
     files = [f for f in os.listdir(os.getcwd()) if f[-9:] == "_LOG_TEMP" and os.path.isfile(os.path.join(os.getcwd(),f))]
     with open("log.txt", "w") as f: 
-        for t in files:
+        for t in files:                                           
             with open(t,"r")as ff:
                 for line in ff:
-                    f.write(line) 
+                    if re.search("Disconnect",line) != None:
+                        f.write(line + "    " + f[:-9]) 
             os.remove(t)
-
-
-# def main():
-#     print_resp = True
-#     total_noresp = 0
-#     counter = 0
-#     times = []
-#     while True:
-#         sleep(1)
-#         response = os.system("ping -n 1 www.bbc.co.uk > null")
-#         if response != 0:
-#             now = datetime.now()
-#             now_string = now.strftime("%H:%M:%S")
-#             print(f"connection lost at {now_string}")
-#             times.append(now_string)
-#             total_noresp += 1
-#             with open("results.txt","w") as f:
-#                 f.write("".join(times))
-#             sleep(5) 
-#             print_resp = True
-#         else:
-#             if print_resp:
-#                 print(response)
-#                 print_resp = False
-#         counter += 1
-#         print(end='\x1b[2K'*(len(times)+2))
-#         print(f"total failed responses after {counter} requests: {total_noresp}")
-#         print("times failed:")
-#         for t in times:
-#             print(t)
-#         # ret_string = "\r" * (len(times) + 2)
-#         # print(ret_string)
+            
 
 def on_closing():
     root.destroy()

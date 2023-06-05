@@ -1,0 +1,8 @@
+
+Pinging gtm-uk.www.bbc.co.uk.pri.bbc.co.uk [212.58.235.129] with 32 bytes of data:
+Reply from 212.58.235.129: bytes=32 time=37ms TTL=54
+
+Ping statistics for 212.58.235.129:
+    Packets: Sent = 1, Received = 1, Lost = 0 (0% loss),
+Approximate round trip times in milli-seconds:
+    Minimum = 37ms, Maximum = 37ms, Average = 37ms
