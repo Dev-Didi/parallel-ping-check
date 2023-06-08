@@ -51,13 +51,13 @@ class TestAddress:
     def add_log(self,time, res,rt):
         self.time_log.append((time,res,rt))
 
-    def write_log(self):
+    def write_log(self, quant):
         if self.file == None:
             return FileNotFoundError
         
         response_string_map = {0: "Connection ok. rt: ",1: "Disconnected. rt: "}
         mutex_file.acquire(blocking=False)
-        for (t,r,rt) in self.time_log:
+        for (t,r,rt) in self.time_log[(-quant):]:
             try:
                 self.file.write(f"{t}:  {response_string_map[r]} {rt}ms.\n")
             except KeyError:
@@ -107,8 +107,9 @@ def thread_ping(address : TestAddress, address_name):
         else:
             address_set[address_name] = "DISCONNECTED\n "
             sleep(3)
-        if counter > 5:
-            address.write_log()
+        threshhold = 5
+        if counter > threshhold:
+            address.write_log(threshhold)
             counter = 0
         mutex_log.release()
         counter += 1
