@@ -5,7 +5,7 @@ from slugify import slugify
 from datetime import datetime
 from time import sleep
 from tkinter import *
-from tkinter import ttk
+from tkinter import filedialog
 from threading import Thread, Lock
 import re
 PLATFORM_PING_ARGS = {"win32": '-n', "linux": '-c'}
@@ -66,13 +66,13 @@ class TestAddress:
 
     def ping(self):
         now = datetime.now()
-        mutex_ping.acquire()
+        # mutex_ping.acquire()
         try:
             response = sp.run(["ping",PING_INDICATOR,"1",self.address],capture_output=True, text=True)
         except:
             print(f"Something went wrong trying to ping {self.address}")
-        finally:
-            mutex_ping.release()
+        # finally:
+        #     mutex_ping.release()
 
         now_string = now.strftime("%H:%M:%S")
         if response.returncode == 0:
@@ -85,8 +85,23 @@ class TestAddress:
         return response
 
 
-def add_addr():
-    ad = addr_in.get()
+def add_addr_from_file():
+    file = filedialog.askopenfile(mode='r', filetypes=[('Text Files', '*.txt')])
+    if file:
+      content = file.readlines()
+      file.close()
+    for l in content:
+        try:
+            add_addr(addr = l)
+        except:
+            print(f"something went wrong trying to add {l} to addresses")
+    
+def add_addr(addr = None, event = None):
+    if addr == None:
+        ad = addr_in.get()
+    else:
+        ad = addr
+    ad = ad.strip()
     ad_object = TestAddress(ad)
     addresses.append(ad_object)
     address_set[ad] = "READY \n"
@@ -103,15 +118,17 @@ def thread_ping(address : TestAddress, address_name):
             rt = re.findall('(.*)Average = ([0-9]*)ms',res.stdout)
             rt = rt[0][-1]
             address_set[address_name] = f"CONNECTED         ping: {rt}ms\n"
+            mutex_log.release()
             sleep(1) 
         else:
             address_set[address_name] = "DISCONNECTED\n "
+            mutex_log.release()
             sleep(3)
         threshhold = 5
         if counter > threshhold:
             address.write_log(threshhold)
             counter = 0
-        mutex_log.release()
+
         counter += 1
     print("Stopping ping thread...")
     address.close_file()
@@ -192,11 +209,12 @@ if __name__ == "__main__":
 
     root = Tk()
     root.title("Ping-Check")
-    root.geometry("500x600")
+    root.geometry("600x600")
 
     addr_in = Entry(root)
-    add_addr_button = Button(root, text = "add", command = add_addr)
 
+    add_addr_button = Button(root, text = "add", command = add_addr)
+    browse_addr_button = Button(root, text = "Browse..", command = add_addr_from_file)
     address_space = Text(root, height= 30, width= 50)
 
     start_button = Button(root, text = "Start", command=start)
@@ -207,6 +225,7 @@ if __name__ == "__main__":
 
     addr_in.grid(row = 1 , column = 2, ipadx = 50)
     add_addr_button.grid(row = 1, column = 3, ipadx = 50)
+    browse_addr_button.grid(row = 2, column = 3)
     start_button.grid(row = 3, column = 3, padx = 10, sticky= W)
     stop_button.grid(row = 4, column = 3, padx = 10, sticky= W)
     root.protocol("WM_DELETE_WINDOWS", on_closing)
