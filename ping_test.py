@@ -19,29 +19,50 @@ addresses = [] # list of address instances
 mutex_ping = Lock() # mutex for accessing the ping command (shouldn't be necessary but seemed buggy without)
 mutex_log = Lock() # mutex for accessing the address_set 
 mutex_file = Lock() # mutex to stop synchronous file read/writes 
+
 class TestAddress:
     address = ""
     ping_count = 0
     time_log = []
     connected = False
+    file_path = ""
+    file = None
+
     def __init__(self,address):
         self.address = address
         self.ping_count = 0
         self.time_log = [] ## make this a list of tuples (a,b,c) -> a = time -> b = response code (1 = problem, 0 = ok) -> c = ping rt (if applicable)
+        self.file_path = slugify(f"{address}-log-temp")
+
+    def open_file(self):
+        try:
+            self.file = open(self.file_path, mode="w")
+        except:
+            print("Something went wrong trying to open " + self.file_path)
+
+    
+    def close_file(self):
+        try:
+            self.file.close()
+        except:
+            print("couldn't close file " + self.file_path)
+
 
     def add_log(self,time, res,rt):
         self.time_log.append((time,res,rt))
 
-    def write_log(self, path, mode='w'):
+    def write_log(self):
+        if self.file == None:
+            return FileNotFoundError
+        
         response_string_map = {0: "Connection ok. rt: ",1: "Disconnected. rt: "}
         mutex_file.acquire(blocking=False)
-        with open(path,mode) as f:
-            for (t,r,rt) in self.time_log:
-                try:
-                    f.write(f"{t}:  {response_string_map[r]} {rt}ms.\n")
-                except KeyError:
-                    f.write(f"{t}:  Unexpected error {r}.\n")
-            mutex_file.release()
+        for (t,r,rt) in self.time_log:
+            try:
+                self.file.write(f"{t}:  {response_string_map[r]} {rt}ms.\n")
+            except KeyError:
+                self.file.write(f"{t}:  Unexpected error {r}.\n")
+        mutex_file.release()
 
     def ping(self):
         now = datetime.now()
@@ -73,6 +94,7 @@ def add_addr():
 
 def thread_ping(address : TestAddress, address_name):
     counter = 0
+    address.open_file()
     global STOP_BOOL
     while not STOP_BOOL:
         res = address.ping()
@@ -86,11 +108,12 @@ def thread_ping(address : TestAddress, address_name):
             address_set[address_name] = "DISCONNECTED\n "
             sleep(3)
         if counter > 5:
-            address.write_log(slugify(f"{address_name}-log-temp"))
+            address.write_log()
             counter = 0
         mutex_log.release()
         counter += 1
     print("Stopping ping thread...")
+    address.close_file()
     return 
 
 def update_address_space():
