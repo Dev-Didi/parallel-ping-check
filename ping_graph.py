@@ -52,12 +52,13 @@ def convert_file(fname,machine_name):
     file_entries.sort()
     return file_entries
 
-def convert_all_files(dir):
+def convert_all_files(d):
     file_entries = {}
-    for f in os.listdir(dir):
+    for f in os.listdir(d):
         if f.endswith("temp"):
-            file_entries[f[:-9]] = convert_file(dir+f,os.path.dirname(dir))
+            file_entries[f[:-9]] = convert_file(d+'\\'+f,os.path.dirname(d))
     return file_entries
+
 
 def draw_single(entries,colour = "red",name = "N/A",subplot=None):
     times = []
@@ -67,14 +68,23 @@ def draw_single(entries,colour = "red",name = "N/A",subplot=None):
         pings.append(entries[i].get_ping())
     if subplot == None:
         plt.plot(times,pings, color = colour, label=name)
+        plt.legend()
+        plt.xlabel("Time of day")
+        plt.ylabel("Ping (ms)")
     else:
-        subplot[0][subplot[1][0],subplot[1][1]].plot(times,pings, color = colour, label=name)
-    plt.legend()
-
+        ax = subplot[0]
+        ax[subplot[1]][subplot[2]].plot(times,pings, color = colour, label=name)
+        ax[subplot[1]][subplot[2]].legend()
+        ax[subplot[1]][subplot[2]].set_xlabel("Time of day")
+        ax[subplot[1]][subplot[2]].set_ylabel("Ping (ms)")
 
 def draw_machine(entries, mname, subplot=None):
     colours = ["red","green","blue","pink","yellow","black","purple"]
-    plt.title(mname)
+    if subplot == None:
+        plt.title(mname)
+    else:
+        ax = subplot[0]
+    ## ax[subplot[1]][subplot[2]].set_title(mname)
     count = 0
     for k in entries:
         print(k)
@@ -83,18 +93,25 @@ def draw_machine(entries, mname, subplot=None):
 
 def draw_day(dir_path):
     full_day_set = {} 
-    for dir in os.listdir(dir):
-        converted = convert_all_files(dir)
-        full_day_set[dir] = converted
+    for d in os.listdir(dir_path):
+        try:
+            converted = convert_all_files(dir_path+d)
+            full_day_set[d] = converted
+        except:
+            continue
 
     plot_count = len(full_day_set)
     col_count = int(np.sqrt(plot_count))
     row_count = int(np.ceil(plot_count / float(col_count)))
+    print(row_count, col_count)
     fig, axs = plt.subplots(col_count,row_count)
+    if axs.ndim == 1: ## Stupidly have to have 2 dimensions
+        axs = [axs][:np.newaxis]
+        axs[0][1] = ["null null null"]
     col_counter = 0
     row_counter = 0
     for machine in full_day_set:
-        draw_machine(full_day_set[machine],machine,(axs,[col_counter,row_counter]))
+        draw_machine(full_day_set[machine],machine,[axs,col_counter,row_counter])
         if col_counter == col_count -1:
             row_counter += 1
             col_counter = 0
@@ -102,11 +119,6 @@ def draw_day(dir_path):
             col_counter +=1
 
 if __name__ == "__main__":
-    file_entries = {} 
-    dir = "C:\\Users\\DanielBrown\\Scripting\\python\\parallel-ping-check\\output\\ping_results\\12JUNE\\level2_desktop_ethernet\\"
-    for f in os.listdir(dir):
-        if f.endswith("temp"):
-            file_entries[f[:-9]] = convert_file(dir+f,os.path.dirname(dir))
-    print(os.path.basename(dir[:-1]))
-    draw_machine(file_entries,os.path.basename(dir[:-1]))
+    draw_day("D:\\lvl2 network test 10082023\\")
+
     plt.show()
